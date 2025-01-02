@@ -21,18 +21,18 @@ Import SetMonadHoare
        SetMonadOperator1
        ListNotations. 
 
-Definition group_of_five_body:
+(* Definition group_of_five_body:
   list Z * list(list Z)   -> SetMonad.M (ContinueOrBreak (list Z * list(list Z) ) (list(list Z))) :=
   fun '(rest_list , current_ret) =>
       match rest_list with
-      | a :: b :: c :: d :: e ::  rest_list' =>
+      | a :: b :: c :: d :: e :: rest_list' =>
         continue (rest_list', [a; b; c; d; e] :: current_ret)
       | nil => break current_ret
       | _ => break (rest_list :: current_ret)
       end.
 
 Definition group_of_five l:=
-  repeat_break group_of_five_body (l, nil).
+  repeat_break group_of_five_body (l, nil). *)
 
 (* Lemma *)
 
@@ -71,21 +71,17 @@ Definition median (l : (list Z)): SetMonad.M Z:=
   ret (get_nth (len / 2) sorted).
 
 Definition get_medians_body:
-(list(list Z) * (list Z)) -> SetMonad.M (ContinueOrBreak (list(list Z) * (list Z)) (list Z)) :=
-  fun '(l_of_ls , current_l) =>
-    match l_of_ls with
+((list Z) * (list Z)) -> SetMonad.M (ContinueOrBreak ((list Z) * (list Z)) (list Z)) :=
+  fun '(rest , current_l) =>
+    match rest with
+    | a :: b :: c :: d :: e :: rest' =>
+      m <- median [a; b; c; d; e];; continue (rest', m :: current_l)
     | nil => break current_l
-    | h :: t => 
-      match h with
-      | nil => continue (t, current_l)  (* 处理空子列表的情况 *)
-      | _ => 
-        m <- median h;;
-        continue (t, m :: current_l)
-      end
+    | _ => m <- median rest;; break (m :: current_l)
     end.
 
-Definition get_medians (l_of_ls: list (list Z)): SetMonad.M (list Z):=
-  repeat_break get_medians_body (l_of_ls, nil).
+Definition get_medians (l: list Z): SetMonad.M (list Z):=
+  repeat_break get_medians_body (l, nil).
 
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
@@ -102,8 +98,7 @@ Definition MedianOfMedians_body
   :=
   match l with
   | a :: b :: c :: d :: e :: f :: l' => 
-    l_of_ls <- group_of_five l;;
-    medians <- get_medians l_of_ls;;
+    medians <- get_medians l;;
     let len := (length medians) in
     pivot <- W medians (Nat.div len 2);;
     '(lo, pivots, hi) <- partition pivot l;;
@@ -145,7 +140,7 @@ Proof.
   change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
   induction n; simpl.
   + unfold Hoare; sets_unfold; tauto.
-  +  
+  + 
 Qed.
 
 
