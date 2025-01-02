@@ -1,5 +1,6 @@
 Require Import SetsClass.SetsClass.
 Require Import Coq.ZArith.ZArith.
+Require Import Coq.ZArith.BinInt.
 Require Import Coq.micromega.Psatz.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
@@ -33,6 +34,8 @@ Definition group_of_five_body:
 Definition group_of_five l:=
   repeat_break group_of_five_body (l, nil).
 
+(* Lemma *)
+
 Definition insertion_sort_body:
   list Z * list Z -> SetMonad.M (ContinueOrBreak (list Z * list Z) (list Z)) :=
   fun '(rest_list, current_ret) =>
@@ -59,18 +62,13 @@ Fixpoint get_nth (n: nat) (l: list Z) : Z :=
   match n, l with
   | O, x::_ => x
   | S n', _::l' => get_nth n' l'
-  | _, nil => 0  
-  end.
+  | _, nil => 0
+end.
 
 Definition median (l : (list Z)): SetMonad.M Z:=
   sorted <- insertion_sort l;;
-  match sorted with
-  | a :: [] => ret a  (* 单元素列表，返回该元素 *)
-  | _ => 
-      
-      let len := Z.of_nat (length sorted) in
-      ret (get_nth (Z.to_nat ((len - 1) / 2)) sorted)
-  end.
+  let len := length sorted in
+  ret (get_nth (len / 2) sorted).
 
 Definition get_medians_body:
 (list(list Z) * (list Z)) -> SetMonad.M (ContinueOrBreak (list(list Z) * (list Z)) (list Z)) :=
@@ -85,30 +83,73 @@ Definition get_medians_body:
         continue (t, m :: current_l)
       end
     end.
-(*TODO*)
 
 Definition get_medians (l_of_ls: list (list Z)): SetMonad.M (list Z):=
   repeat_break get_medians_body (l_of_ls, nil).
 
-Definition MedianOfMedians_body:
-  list Z -> SetMonad.M (ContinueOrBreak (list Z) (Z)) :=
-  fun '(l) =>
-    match l with
-    | a :: b :: c :: d :: e :: f::l' =>
-      l_of_ls <- group_of_five l;;
-      m <- get_medians l_of_ls;;
-        continue (m)
-    | _ =>
-        m <- median l;;       (* 先计算 median *)
-        break m 
-    end.
-    
-Definition MedianOfMedians (l: (list Z)): SetMonad.M Z :=
-  repeat_break MedianOfMedians_body (l).    
+Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
+  fun '(l1, l2, l3) =>
+    Permutation l (l1 ++ l2 ++ l3)
+    /\ (forall x, In x l1 -> x < pivot)
+    /\ (forall x, In x l2 -> x = pivot)
+    /\ (forall x, In x l3 -> x > pivot).
+
+Definition MedianOfMedians_body
+      (W: list Z -> nat -> SetMonad.M Z)
+      (l: list Z)
+      (k: nat)
+  : SetMonad.M Z
+  :=
+  match l with
+  | a :: b :: c :: d :: e :: f :: l' => 
+    l_of_ls <- group_of_five l;;
+    medians <- get_medians l_of_ls;;
+    let len := (length medians) in
+    pivot <- W medians (Nat.div len 2);;
+    '(lo, pivots, hi) <- partition pivot l;;
+    (* match Nat.compare k (length lo) with
+    | Lt => W lo k
+    | _ => match Nat.compare k (length lo + length pivots) with
+      | Lt => ret pivot
+      | _ => W hi (Nat.sub k (length lo + length pivots))
+      end
+    end *)
+    if Nat.ltb k (length lo) then
+      W lo k
+    else if Nat.ltb k (length lo + length pivots) then
+      ret pivot
+    else
+      W hi (Nat.sub k (length lo + length pivots))
+  | _ => 
+    sorted_l <- insertion_sort l;;
+    ret (get_nth k sorted_l)
+  end.
+
+Definition MedianOfMedians: list Z -> nat -> SetMonad.M Z :=
+  Kleene_LFix MedianOfMedians_body.
+
+Definition In' (l: list Z) (x : Z): Prop :=
+  In x l.
 
 Theorem MedianOfMedians_correct:
-  forall l,
-    Hoare (MedianOfMedians l) (fun x => In x l).
-Admitted.
+  forall l k,
+    (k < length l)%nat ->
+    Hoare (MedianOfMedians l k) (fun x => In' l x).
+Proof.
+  intros.
+  unfold MedianOfMedians.
+  unfold Kleene_LFix.
+  unfold_CPO_defs.
+  intros a [n ?].
+  revert a H0.
+  change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
+  induction n; simpl.
+  + unfold Hoare; sets_unfold; tauto.
+  +  
+Qed.
+
+
+
+
 
 End QSortExample2.
