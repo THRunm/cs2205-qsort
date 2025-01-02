@@ -97,7 +97,7 @@ Definition MedianOfMedians_body
   : SetMonad.M Z
   :=
   match l with
-  | a :: b :: c :: d :: e :: f :: l' => 
+  | a :: b :: c :: d :: e :: l' => 
     medians <- get_medians l;;
     let len := (length medians) in
     pivot <- W medians (Nat.div len 2);;
@@ -126,6 +126,16 @@ Definition MedianOfMedians: list Z -> nat -> SetMonad.M Z :=
 Definition In' (l: list Z) (x : Z): Prop :=
   In x l.
 
+Theorem PermutationIn:
+  forall (p q: list Z) (x: Z),
+    Permutation p q -> In' p x <-> In' q x.
+Admitted.
+
+Theorem GetnthIn:
+  forall (k: nat) (l: list Z),
+    (k < length l)%nat -> In' l (get_nth k l).
+Admitted.
+
 Theorem MedianOfMedians_correct:
   forall l k,
     (k < length l)%nat ->
@@ -140,11 +150,43 @@ Proof.
   change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
   induction n; simpl.
   + unfold Hoare; sets_unfold; tauto.
-  + 
+  + destruct l as [|a [|b [|c [|d [|e rest]]]]].
+    - simpl in H; lia.
+    - eapply Hoare_bind.
+      * apply insertion_sort_perm.
+      * intros; apply Hoare_ret.
+        pose proof PermutationIn [a] a0 (get_nth k a0) H0.
+        rewrite H1; apply GetnthIn.
+        assert(length [a] = length a0).
+        apply Permutation_length; exact H0.
+        lia.
+    - eapply Hoare_bind.
+      * apply insertion_sort_perm.
+      * intros; apply Hoare_ret.
+        pose proof PermutationIn [a; b] a0 (get_nth k a0) H0.
+        rewrite H1; apply GetnthIn.
+        assert(length [a; b] = length a0).
+        apply Permutation_length; exact H0.
+        lia.
+    - eapply Hoare_bind.
+      * apply insertion_sort_perm.
+      * intros; apply Hoare_ret.
+        pose proof PermutationIn [a; b; c] a0 (get_nth k a0) H0.
+        rewrite H1; apply GetnthIn.
+        assert(length [a; b; c] = length a0).
+        apply Permutation_length; exact H0.
+        lia.
+    - eapply Hoare_bind.
+      * apply insertion_sort_perm.
+      * intros; apply Hoare_ret.
+        pose proof PermutationIn [a; b; c; d] a0 (get_nth k a0) H0.
+        rewrite H1; apply GetnthIn.
+        assert(length [a; b; c; d] = length a0).
+        apply Permutation_length; exact H0.
+        lia.
+    - eapply Hoare_bind.
+      *
+
 Qed.
-
-
-
-
 
 End QSortExample2.
