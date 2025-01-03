@@ -127,6 +127,44 @@ Definition median (l : (list Z)): SetMonad.M Z:=
   let len := length sorted in
   ret (get_nth (len / 2) sorted).
 
+Lemma median_correct: 
+  forall l,
+  l <> nil ->  (* Added non-empty condition *)
+  Hoare (median l) (fun x => In' l x).
+Proof.
+  unfold Hoare, median.
+  intros l Hnonempty x.  (* Added Hnonempty hypothesis *)
+  eapply Hoare_bind.
+  - apply insertion_sort_perm.
+  - intros sorted Hperm.
+    unfold ret, set_monad, SetMonad.ret.
+    unfold Hoare.
+    intros.
+    sets_unfold in H.
+    rewrite <- H.
+    (* First show it's in sorted *)
+    assert (Hin_sorted: In' sorted (get_nth (length sorted / 2) sorted)).
+    {
+      apply GetnthIn.
+      apply Nat.div_lt.
+      (* 证明排序后的列表非空 *)
+      assert (Z.of_nat(length sorted) > 0) as Hlen.
+      {
+        apply Permutation_length in Hperm.
+        rewrite <- Hperm.
+        destruct l.
+        - contradiction Hnonempty; reflexivity.
+        - simpl; lia.
+      }
+       * lia.
+       * lia.
+    }
+    (* Then use permutation to show it's in l *)
+    apply Permutation_in with sorted; auto.
+    rewrite <- Hperm.
+    reflexivity.
+Qed.
+
 Definition get_medians_body:
 ((list Z) * (list Z)) -> SetMonad.M (ContinueOrBreak ((list Z) * (list Z)) (list Z)) :=
   fun '(rest , current_l) =>
