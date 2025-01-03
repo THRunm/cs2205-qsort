@@ -219,25 +219,28 @@ Proof.
   unfold Kleene_LFix.
   unfold_CPO_defs.
   intros a [n ?].
-  revert a H0.
-  change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
+  revert a H0 H.
+  revert k.
+  change (forall Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
   induction n; simpl.
   + unfold Hoare; sets_unfold; tauto.
   + unfold MedianOfMedians_body at 1.
     apply Hoare_choice.
     - apply Hoare_test_bind; intros.
-      eapply Hoare_bind.
-      * apply insertion_sort_perm.
-      * intros; apply Hoare_ret.
-        pose proof permutation_in l a (get_nth k a) H1.
-        rewrite H2; apply get_nth_in.
-        assert (length l = length a). {
-          apply Permutation_length; exact H1.
-        }
-        lia.
+      eapply Hoare_bind; [apply insertion_sort_perm |].
+      intros; apply Hoare_ret.
+      pose proof permutation_in l a (get_nth k a) H1.
+      rewrite H2; apply get_nth_in.
+      assert (length l = length a). {
+        apply Permutation_length; exact H1.
+      }
+      lia.
     - apply Hoare_test_bind; intros.
+      eapply Hoare_bind; [apply get_medians_in |].
+      intros.
       eapply Hoare_bind.
       * 
+        
 Qed.
 
 End QSortExample2.
