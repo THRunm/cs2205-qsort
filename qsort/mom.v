@@ -140,18 +140,128 @@ Definition get_medians_body:
 Definition get_medians (l: list Z): SetMonad.M (list Z):=
   repeat_break get_medians_body (l, nil).
 
-(* Lemma get_medians_in:
-  forall l: list Z,
-    l' <- get_medians l;; forall x: Z, In x l' -> In x l. *)
-
-Definition list_include (l l': list Z):=
-  forall x: Z, In' l' x -> In' l x.
-
-Lemma get_medians_in:
-  forall (l: list Z),
-    Hoare (get_medians l) (list_include l).
-Admitted.
-
+Theorem get_medians_correct:
+forall l: list Z,
+  Hoare (get_medians l) 
+    (fun result => forall x, In x result -> In x l).
+    Proof.
+    intros l.
+    unfold get_medians.
+    apply (Hoare_repeat_break _ 
+      (fun '(rest, curr) => 
+        (forall x, In x curr -> In x l) /\ 
+        (forall x, In x rest -> In x l))).
+    
+    intros [rest curr] [Hcurr Hrest].
+    destruct rest as [|a [|b [|c [|d [|e rest']]]]].
+    
+    - (* Empty case *)
+      unfold get_medians_body.
+      apply Hoare_ret.
+      intros x Hin. apply Hcurr, Hin.
+      
+    - (* 1 element case *)
+      unfold get_medians_body.
+      eapply Hoare_bind.
+      + apply median_correct.
+        discriminate.
+      + intros m Hm.
+        apply Hoare_ret.
+        intros x Hin.
+        simpl in Hin.
+        destruct Hin as [Heq | Hin].
+        * subst x.
+          unfold In' in Hm.
+          apply Hrest.
+          apply Hm.
+        * apply Hcurr, Hin.
+          
+    - (* 2 elements case *)
+      unfold get_medians_body.
+      eapply Hoare_bind.
+      + apply median_correct.
+        discriminate.
+      + intros m Hm.
+        apply Hoare_ret.
+        intros x Hin.
+        simpl in Hin.
+        destruct Hin as [Heq | Hin].
+        * subst x.
+          unfold In' in Hm.
+          apply Hrest.
+          apply Hm.
+        * apply Hcurr, Hin.
+          
+    - (* 3 elements case *)
+      unfold get_medians_body.
+      eapply Hoare_bind.
+      + apply median_correct.
+        discriminate.
+      + intros m Hm.
+        apply Hoare_ret.
+        intros x Hin.
+        simpl in Hin.
+        destruct Hin as [Heq | Hin].
+        * subst x.
+          unfold In' in Hm.
+          apply Hrest.
+          apply Hm.
+        * apply Hcurr, Hin.
+          
+    - (* 4 elements case *)
+      unfold get_medians_body.
+      eapply Hoare_bind.
+      + apply median_correct.
+        discriminate.
+      + intros m Hm.
+        apply Hoare_ret.
+        intros x Hin.
+        simpl in Hin.
+        destruct Hin as [Heq | Hin].
+        * subst x.
+          unfold In' in Hm.
+          apply Hrest.
+          apply Hm.
+        * apply Hcurr, Hin.
+          
+        - (* 5+ elements case *)
+        unfold get_medians_body.
+        eapply Hoare_bind.
+        + apply median_correct.
+          discriminate.
+        + intros m Hm.
+          simpl in Hm.
+          apply Hoare_ret.
+          split.
+          * (* Prove curr property *)
+            intros x Hin.
+            simpl in Hin.
+            destruct Hin as [Heq | Hin].
+            -- assert (In m (a::b::c::d::e::rest')).
+            {
+              destruct Hm as [H1|[H2|[H3|[H4|[H5|F]]]]].
+              - subst a. simpl. left. reflexivity.
+              - subst b. simpl. right. left. reflexivity.
+              - subst c. simpl. right. right. left. reflexivity.
+              - subst d. simpl. right. right. right. left. reflexivity.
+              - subst e. simpl. right. right. right. right. left. reflexivity.
+              - contradiction.
+            }
+            specialize (Hrest m H).
+            rewrite Heq in Hrest.
+            apply Hrest.
+            -- specialize (Hcurr x Hin).
+            apply Hcurr.
+        * (* Prove rest property *)
+            intros x Hin.
+            apply Hrest.
+            right. right. right. right. right.
+            exact Hin.
+      - (* Initial case *)
+        split.
+        + intros x H; contradiction.
+        + intros x H; assumption.
+  Qed.
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
     Permutation l (l1 ++ l2 ++ l3)
