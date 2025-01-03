@@ -394,7 +394,15 @@ Admitted.
 
 Lemma Kleene_list_include (l l': list Z):
   forall n k: nat, list_include l l' -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l') -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l).
-Admitted.
+Proof.
+  intros.
+  eapply Hoare_conseq; [| apply H0].
+  intros.
+  unfold list_include in H.
+  pose proof H a H1.
+  apply H2.
+Qed.
+
 
 Lemma list_partition_include (l l1 l2: list Z):
   Permutation l (l1 ++ l2) -> (list_include l l1 /\ list_include l l2).
