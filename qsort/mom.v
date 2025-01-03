@@ -130,7 +130,7 @@ Definition median (l : (list Z)): SetMonad.M Z:=
 Lemma median_correct: 
   forall l,
   l <> nil ->  (* Added non-empty condition *)
-  Hoare (median l) (fun x => In' l x).
+  Hoare (median l) (In' l).
 Proof.
   unfold Hoare, median.
   intros l Hnonempty x.  (* Added Hnonempty hypothesis *)
@@ -178,128 +178,135 @@ Definition get_medians_body:
 Definition get_medians (l: list Z): SetMonad.M (list Z):=
   repeat_break get_medians_body (l, nil).
 
+Definition list_include_nonempty (l l': list Z):=
+    (l' <> nil) /\ (forall x: Z, In x l' -> In x l).
+
+Definition list_include (l l': list Z) :=
+  forall x: Z, In x l' -> In x l.
+
 Theorem get_medians_correct:
 forall l: list Z,
-  Hoare (get_medians l) 
-    (fun result => forall x, In x result -> In x l).
-    Proof.
-    intros l.
-    unfold get_medians.
-    apply (Hoare_repeat_break _ 
-      (fun '(rest, curr) => 
-        (forall x, In x curr -> In x l) /\ 
-        (forall x, In x rest -> In x l))).
+  Hoare (get_medians l)
+    (list_include_nonempty l).
+Admitted.
+(* Proof.
+  intros l.
+  unfold get_medians.
+  apply (Hoare_repeat_break _ 
+    (fun '(rest, curr) => 
+      (forall x, In x curr -> In x l) /\ 
+      (forall x, In x rest -> In x l))).
+  
+  intros [rest curr] [Hcurr Hrest].
+  destruct rest as [|a [|b [|c [|d [|e rest']]]]].
+  
+  - (* Empty case *)
+    unfold get_medians_body.
+    apply Hoare_ret.
+    intros x Hin. apply Hcurr, Hin.
     
-    intros [rest curr] [Hcurr Hrest].
-    destruct rest as [|a [|b [|c [|d [|e rest']]]]].
-    
-    - (* Empty case *)
-      unfold get_medians_body.
+  - (* 1 element case *)
+    unfold get_medians_body.
+    eapply Hoare_bind.
+    + apply median_correct.
+      discriminate.
+    + intros m Hm.
       apply Hoare_ret.
-      intros x Hin. apply Hcurr, Hin.
-      
-    - (* 1 element case *)
-      unfold get_medians_body.
-      eapply Hoare_bind.
-      + apply median_correct.
-        discriminate.
-      + intros m Hm.
-        apply Hoare_ret.
+      intros x Hin.
+      simpl in Hin.
+      destruct Hin as [Heq | Hin].
+      * subst x.
+        unfold In' in Hm.
+        apply Hrest.
+        apply Hm.
+      * apply Hcurr, Hin.
+        
+  - (* 2 elements case *)
+    unfold get_medians_body.
+    eapply Hoare_bind.
+    + apply median_correct.
+      discriminate.
+    + intros m Hm.
+      apply Hoare_ret.
+      intros x Hin.
+      simpl in Hin.
+      destruct Hin as [Heq | Hin].
+      * subst x.
+        unfold In' in Hm.
+        apply Hrest.
+        apply Hm.
+      * apply Hcurr, Hin.
+        
+  - (* 3 elements case *)
+    unfold get_medians_body.
+    eapply Hoare_bind.
+    + apply median_correct.
+      discriminate.
+    + intros m Hm.
+      apply Hoare_ret.
+      intros x Hin.
+      simpl in Hin.
+      destruct Hin as [Heq | Hin].
+      * subst x.
+        unfold In' in Hm.
+        apply Hrest.
+        apply Hm.
+      * apply Hcurr, Hin.
+        
+  - (* 4 elements case *)
+    unfold get_medians_body.
+    eapply Hoare_bind.
+    + apply median_correct.
+      discriminate.
+    + intros m Hm.
+      apply Hoare_ret.
+      intros x Hin.
+      simpl in Hin.
+      destruct Hin as [Heq | Hin].
+      * subst x.
+        unfold In' in Hm.
+        apply Hrest.
+        apply Hm.
+      * apply Hcurr, Hin.
+        
+  - (* 5+ elements case *)
+    unfold get_medians_body.
+    eapply Hoare_bind.
+    + apply median_correct.
+      discriminate.
+    + intros m Hm.
+      simpl in Hm.
+      apply Hoare_ret.
+      split.
+      * (* Prove curr property *)
         intros x Hin.
         simpl in Hin.
         destruct Hin as [Heq | Hin].
-        * subst x.
-          unfold In' in Hm.
-          apply Hrest.
-          apply Hm.
-        * apply Hcurr, Hin.
-          
-    - (* 2 elements case *)
-      unfold get_medians_body.
-      eapply Hoare_bind.
-      + apply median_correct.
-        discriminate.
-      + intros m Hm.
-        apply Hoare_ret.
+        -- assert (In m (a::b::c::d::e::rest')).
+        {
+          destruct Hm as [H1|[H2|[H3|[H4|[H5|F]]]]].
+          - subst a. simpl. left. reflexivity.
+          - subst b. simpl. right. left. reflexivity.
+          - subst c. simpl. right. right. left. reflexivity.
+          - subst d. simpl. right. right. right. left. reflexivity.
+          - subst e. simpl. right. right. right. right. left. reflexivity.
+          - contradiction.
+        }
+        specialize (Hrest m H).
+        rewrite Heq in Hrest.
+        apply Hrest.
+        -- specialize (Hcurr x Hin).
+        apply Hcurr.
+      * (* Prove rest property *)
         intros x Hin.
-        simpl in Hin.
-        destruct Hin as [Heq | Hin].
-        * subst x.
-          unfold In' in Hm.
-          apply Hrest.
-          apply Hm.
-        * apply Hcurr, Hin.
-          
-    - (* 3 elements case *)
-      unfold get_medians_body.
-      eapply Hoare_bind.
-      + apply median_correct.
-        discriminate.
-      + intros m Hm.
-        apply Hoare_ret.
-        intros x Hin.
-        simpl in Hin.
-        destruct Hin as [Heq | Hin].
-        * subst x.
-          unfold In' in Hm.
-          apply Hrest.
-          apply Hm.
-        * apply Hcurr, Hin.
-          
-    - (* 4 elements case *)
-      unfold get_medians_body.
-      eapply Hoare_bind.
-      + apply median_correct.
-        discriminate.
-      + intros m Hm.
-        apply Hoare_ret.
-        intros x Hin.
-        simpl in Hin.
-        destruct Hin as [Heq | Hin].
-        * subst x.
-          unfold In' in Hm.
-          apply Hrest.
-          apply Hm.
-        * apply Hcurr, Hin.
-          
-        - (* 5+ elements case *)
-        unfold get_medians_body.
-        eapply Hoare_bind.
-        + apply median_correct.
-          discriminate.
-        + intros m Hm.
-          simpl in Hm.
-          apply Hoare_ret.
-          split.
-          * (* Prove curr property *)
-            intros x Hin.
-            simpl in Hin.
-            destruct Hin as [Heq | Hin].
-            -- assert (In m (a::b::c::d::e::rest')).
-            {
-              destruct Hm as [H1|[H2|[H3|[H4|[H5|F]]]]].
-              - subst a. simpl. left. reflexivity.
-              - subst b. simpl. right. left. reflexivity.
-              - subst c. simpl. right. right. left. reflexivity.
-              - subst d. simpl. right. right. right. left. reflexivity.
-              - subst e. simpl. right. right. right. right. left. reflexivity.
-              - contradiction.
-            }
-            specialize (Hrest m H).
-            rewrite Heq in Hrest.
-            apply Hrest.
-            -- specialize (Hcurr x Hin).
-            apply Hcurr.
-        * (* Prove rest property *)
-            intros x Hin.
-            apply Hrest.
-            right. right. right. right. right.
-            exact Hin.
-      - (* Initial case *)
-        split.
-        + intros x H; contradiction.
-        + intros x H; assumption.
-Qed.
+        apply Hrest.
+        right. right. right. right. right.
+        exact Hin.
+  - (* Initial case *)
+    split.
+    + intros x H; contradiction.
+    + intros x H; assumption.
+Qed. *)
              
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
@@ -307,6 +314,21 @@ Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list 
     /\ (forall x, In x l1 -> x < pivot)
     /\ (forall x, In x l2 -> x = pivot)
     /\ (forall x, In x l3 -> x > pivot).
+
+Lemma partition_correct:
+  forall pivot l,
+    Hoare (partition pivot l)
+      (fun '(l1, l2, l3) =>
+        Permutation l (l1 ++ l2 ++ l3)).
+Proof.
+  intros pivot l.
+  unfold Hoare, partition.
+  intros triple.
+  destruct triple as [[l1 l2] l3].
+  sets_unfold.
+  intros [H_perm [H_l1 [H_l2 H_l3]]].
+  exact H_perm.
+Qed.
 
 Definition MedianOfMedians_body
       (W: list Z -> nat -> SetMonad.M Z)
@@ -316,18 +338,20 @@ Definition MedianOfMedians_body
   :=
   choice
     ((test (length l < 5)%nat);;
-     sorted <- insertion_sort l;;
-     ret (get_nth k sorted))
+      sorted <- insertion_sort l;;
+      ret (get_nth k sorted))
     ((test (length l >= 5)%nat);;
-     medians <- get_medians l;;
-     pivot <- W medians (length medians / 2)%nat;;
-     '(lo, pivots, hi) <- partition pivot l;;
-     if Nat.ltb k (length lo) then
-       W lo k
-     else if Nat.ltb k (length lo + length pivots) then
-       ret pivot
-     else
-       W hi (Nat.sub k (length lo + length pivots))).
+      medians <- get_medians l;;
+      pivot <- W medians (length medians / 2)%nat;;
+      '(lo, pivots, hi) <- partition pivot l;;
+      choice
+        ((test (k < length lo)%nat);;
+          W lo k)
+        (choice
+          ((test (length lo <= k < length lo + length pivots)%nat);;
+            ret pivot)
+          ((test (length lo + length pivots <= k)%nat);;
+            W hi (k - (length lo) - (length pivots))%nat))).
 
 Definition MedianOfMedians: list Z -> nat -> SetMonad.M Z :=
   Kleene_LFix MedianOfMedians_body.
@@ -358,6 +382,28 @@ Proof.
    + auto.
 Qed.
 
+(* Lemma list_include_length:
+  forall (l l': list Z), 
+    list_include l l' -> (length l' <= length l)%nat.
+Admitted. *)
+
+Lemma list_length_half_lt:
+  forall (a: list Z),
+    a <> nil -> (length a / 2 < length a)%nat.
+Admitted.
+
+Lemma Kleene_list_include (l l': list Z):
+  forall n k: nat, list_include l l' -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l') -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l).
+Admitted.
+
+Lemma list_partition_include (l l1 l2: list Z):
+  Permutation l (l1 ++ l2) -> (list_include l l1 /\ list_include l l2).
+Admitted.
+
+Lemma list_partition_length (l l1 l2: list Z):
+  Permutation l (l1 ++ l2) -> (length l = length l1 + length l2)%nat.
+Admitted.
+
 Theorem MedianOfMedians_correct:
   forall l k,
     (k < length l)%nat ->
@@ -369,10 +415,13 @@ Proof.
   unfold_CPO_defs.
   intros a [n ?].
   revert a H0.
-  change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
+  revert H.
+  revert k.
+  revert l.
+  change (forall l k, (k < length l)%nat -> Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
   induction n; simpl.
   + unfold Hoare; sets_unfold; tauto.
-  + unfold MedianOfMedians_body at 1.
+  + unfold MedianOfMedians_body at 1; intros.
     apply Hoare_choice.
     - apply Hoare_test_bind; intros.
       eapply Hoare_bind.
@@ -385,8 +434,50 @@ Proof.
         }
         lia.
     - apply Hoare_test_bind; intros.
-      eapply Hoare_bind.
-      * 
+      eapply Hoare_bind; [apply get_medians_correct |].
+      intros a [? ?].
+      eapply Hoare_bind. {
+        pose proof list_length_half_lt a H1.
+        pose proof IHn a (length a / 2)%nat H3.
+        apply H4.
+      }
+      intros.
+      eapply Hoare_bind; [apply partition_correct |].
+      intros [[l1 l2] l3] ?.
+      apply Hoare_choice. {
+        apply Hoare_test_bind.
+        intros.
+        pose proof IHn l1 k H5.
+        pose proof list_partition_include l l1 (l2 ++ l3) H4 as [? ?].
+        pose proof Kleene_list_include l l1 n k H7 H6.
+        exact H9.
+      }
+      apply Hoare_choice. {
+        apply Hoare_test_bind.
+        intros.
+        apply Hoare_ret.
+        pose proof H2 a0 H3.
+        apply H6.
+      }
+      apply Hoare_test_bind.
+      intros.
+      eapply Hoare_conseq.
+      2: {
+        pose proof list_partition_length l l1 (l2 ++ l3) H4.
+        pose proof app_length l2 l3.
+        rewrite H7 in H6.
+        assert((k - length l1 - length l2 < length l3)%nat). {
+          lia.
+        }
+        pose proof IHn l3 (k - length l1 - length l2)%nat H8.
+        apply H9.
+      }
+      intros.
+      pose proof app_assoc l1 l2 l3.
+      rewrite H7 in H4.
+      pose proof list_partition_include l (l1 ++ l2) l3 H4 as [? ?].
+      apply H9.
+      apply H6.
 Qed.
 
 End QSortExample2.
