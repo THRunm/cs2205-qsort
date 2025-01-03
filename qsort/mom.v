@@ -1,11 +1,14 @@
 Require Import SetsClass.SetsClass.
 Require Import Coq.ZArith.ZArith.
+Require Import Coq.Arith.Arith.
 Require Import Coq.ZArith.BinInt.
+Require Import Coq.Arith.PeanoNat.
 Require Import Coq.micromega.Psatz.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Lists.List.
 Require Import Coq.Sorting.Permutation.
 Require Import PL.FixedPoint.
+Require Import Coq.Lists.List.
 Require Import PL.Monad.
 Import SetsNotation
        KleeneFix Sets_CPO
@@ -20,21 +23,6 @@ Import SetMonadHoare
        SetMonadOperator0
        SetMonadOperator1
        ListNotations. 
-
-(* Definition group_of_five_body:
-  list Z * list(list Z)   -> SetMonad.M (ContinueOrBreak (list Z * list(list Z) ) (list(list Z))) :=
-  fun '(rest_list , current_ret) =>
-      match rest_list with
-      | a :: b :: c :: d :: e :: rest_list' =>
-        continue (rest_list', [a; b; c; d; e] :: current_ret)
-      | nil => break current_ret
-      | _ => break (rest_list :: current_ret)
-      end.
-
-Definition group_of_five l:=
-  repeat_break group_of_five_body (l, nil). *)
-
-(* Lemma *)
 
 Fixpoint insert (x : Z) (l : list Z) : list Z :=
  match l with
@@ -89,7 +77,7 @@ Proof.
   - apply Hoare_ret.
     simpl in *.
     apply perm_trans with (z :: rest ++ sorted).
-   * apply H.  (* 使用假设 H *)
+   * apply H.
    * apply perm_trans with (rest ++ z :: sorted).
    + apply Permutation_middle.
    + rewrite <- insert_perm.
@@ -129,11 +117,11 @@ Definition median (l : (list Z)): SetMonad.M Z:=
 
 Lemma median_correct: 
   forall l,
-  l <> nil ->  (* Added non-empty condition *)
+  l <> nil ->
   Hoare (median l) (In' l).
 Proof.
   unfold Hoare, median.
-  intros l Hnonempty x.  (* Added Hnonempty hypothesis *)
+  intros l Hnonempty x.
   eapply Hoare_bind.
   - apply insertion_sort_perm.
   - intros sorted Hperm.
@@ -142,12 +130,10 @@ Proof.
     intros.
     sets_unfold in H.
     rewrite <- H.
-    (* First show it's in sorted *)
     assert (Hin_sorted: In' sorted (get_nth (length sorted / 2) sorted)).
     {
       apply get_nth_in.
       apply Nat.div_lt.
-      (* 证明排序后的列表非空 *)
       assert (Z.of_nat(length sorted) > 0) as Hlen.
       {
         apply Permutation_length in Hperm.
@@ -159,7 +145,6 @@ Proof.
        * lia.
        * lia.
     }
-    (* Then use permutation to show it's in l *)
     apply Permutation_in with sorted; auto.
     rewrite <- Hperm.
     reflexivity.
@@ -184,12 +169,68 @@ Definition list_include_nonempty (l l': list Z):=
 Definition list_include (l l': list Z) :=
   forall x: Z, In x l' -> In x l.
 
-Theorem get_medians_correct:
+Lemma get_medians_no_empty:
 forall l: list Z,
-  Hoare (get_medians l)
-    (list_include_nonempty l).
-Admitted.
-(* Proof.
+  l <> nil -> Hoare (get_medians l)
+    (fun l' => l' <> nil).
+    Proof.
+    intros l H.
+    unfold get_medians.
+    apply (Hoare_repeat_break _
+      (fun '(rest, current) => rest = nil -> current <> nil)).
+    intros [rest current] H_inv.
+    unfold get_medians_body.
+    destruct rest as [ | a [ | b [ | c [ | d [ | e rest']]]]].
+    
+    - apply Hoare_ret.
+      apply H_inv; reflexivity.
+      
+    - eapply Hoare_bind.
+      + apply median_correct.
+        intros H1. discriminate H1.
+      + intros m _.
+        apply Hoare_ret.
+        intros H1. discriminate H1.
+        
+    - eapply Hoare_bind.
+      + apply median_correct.
+        intros H1. discriminate H1.
+      + intros m _.
+        apply Hoare_ret.
+        intros H1. discriminate H1.
+        
+    - eapply Hoare_bind.
+      + apply median_correct.
+        intros H1. discriminate H1.
+      + intros m _.
+        apply Hoare_ret.
+        intros H1. discriminate H1.
+        
+    - eapply Hoare_bind.
+      + apply median_correct.
+        intros H1. discriminate H1.
+      + intros m _.
+        apply Hoare_ret.
+        intros H1. discriminate H1.
+        
+    - eapply Hoare_bind.
+      + apply median_correct.
+        intros H1. discriminate H1.
+      + intros m _.
+        apply Hoare_ret.
+        intros H_rest.
+        intros H1. discriminate H1.
+    
+    - intros H_empty.
+      contradiction H.
+Qed.
+
+
+Theorem get_medians_include:
+forall l: list Z,
+ Hoare (get_medians l) 
+  (list_include l).
+  Proof.
   intros l.
   unfold get_medians.
   apply (Hoare_repeat_break _ 
@@ -200,13 +241,11 @@ Admitted.
   intros [rest curr] [Hcurr Hrest].
   destruct rest as [|a [|b [|c [|d [|e rest']]]]].
   
-  - (* Empty case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     apply Hoare_ret.
     intros x Hin. apply Hcurr, Hin.
     
-  - (* 1 element case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     eapply Hoare_bind.
     + apply median_correct.
       discriminate.
@@ -221,8 +260,7 @@ Admitted.
         apply Hm.
       * apply Hcurr, Hin.
         
-  - (* 2 elements case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     eapply Hoare_bind.
     + apply median_correct.
       discriminate.
@@ -237,8 +275,7 @@ Admitted.
         apply Hm.
       * apply Hcurr, Hin.
         
-  - (* 3 elements case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     eapply Hoare_bind.
     + apply median_correct.
       discriminate.
@@ -253,8 +290,7 @@ Admitted.
         apply Hm.
       * apply Hcurr, Hin.
         
-  - (* 4 elements case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     eapply Hoare_bind.
     + apply median_correct.
       discriminate.
@@ -269,8 +305,7 @@ Admitted.
         apply Hm.
       * apply Hcurr, Hin.
         
-  - (* 5+ elements case *)
-    unfold get_medians_body.
+  - unfold get_medians_body.
     eapply Hoare_bind.
     + apply median_correct.
       discriminate.
@@ -278,8 +313,7 @@ Admitted.
       simpl in Hm.
       apply Hoare_ret.
       split.
-      * (* Prove curr property *)
-        intros x Hin.
+      * intros x Hin.
         simpl in Hin.
         destruct Hin as [Heq | Hin].
         -- assert (In m (a::b::c::d::e::rest')).
@@ -297,16 +331,28 @@ Admitted.
         apply Hrest.
         -- specialize (Hcurr x Hin).
         apply Hcurr.
-      * (* Prove rest property *)
-        intros x Hin.
+      * intros x Hin.
         apply Hrest.
         right. right. right. right. right.
         exact Hin.
-  - (* Initial case *)
-    split.
+  - split.
     + intros x H; contradiction.
     + intros x H; assumption.
-Qed. *)
+Qed.
+
+Theorem get_medians_correct:
+forall l: list Z,
+  l <> nil -> Hoare (get_medians l)
+    (list_include_nonempty l).
+Proof.
+  unfold list_include_nonempty.
+  unfold Hoare.
+  intros l.
+  split.
+  * apply (get_medians_no_empty l H a H0).
+  * apply (get_medians_include l).
+    exact H0.
+Qed.
              
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
@@ -382,15 +428,30 @@ Proof.
    + auto.
 Qed.
 
-(* Lemma list_include_length:
-  forall (l l': list Z), 
-    list_include l l' -> (length l' <= length l)%nat.
-Admitted. *)
+Lemma not_nil_length_pos: forall (A: Type) (l: list A),
+  l <> nil -> (length l > 0)%nat.
+Proof.
+  intros A l Hnil.
+  destruct l as [|x l'].
+  - contradiction.
+  - simpl. 
+    apply gt_Sn_O. 
+Qed.
 
-Lemma list_length_half_lt:
-  forall (a: list Z),
-    a <> nil -> (length a / 2 < length a)%nat.
-Admitted.
+Lemma list_length_half_lt: forall (a: list Z),
+  a <> nil -> (length a / 2 < length a)%nat.
+Proof.
+  intros.
+  apply not_nil_length_pos in H.
+  apply Nat.div_lt_upper_bound.
+  - nia.
+  - assert (H1: (length a + length a = 2 * length a)%nat).
+  { lia. }
+  rewrite <- H1.
+  apply Nat.lt_add_pos_r.
+  exact H.
+Qed.
+
 
 Lemma Kleene_list_include (l l': list Z):
   forall n k: nat, list_include l l' -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l') -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l).
@@ -406,11 +467,33 @@ Qed.
 
 Lemma list_partition_include (l l1 l2: list Z):
   Permutation l (l1 ++ l2) -> (list_include l l1 /\ list_include l l2).
-Admitted.
+Proof.
+  unfold list_include.
+  split.
+  + intros x Hin.
+    apply Permutation_in with (l1 ++ l2).
+    - symmetry.
+      exact H.
+    - apply in_or_app.
+    left.
+    exact Hin.   
+  + intros x Hin. 
+    apply Permutation_in with (l1 ++ l2).
+    - symmetry.
+      exact H.
+    - apply in_or_app.
+    right.
+    exact Hin.   
+Qed.  
 
 Lemma list_partition_length (l l1 l2: list Z):
   Permutation l (l1 ++ l2) -> (length l = length l1 + length l2)%nat.
-Admitted.
+Proof.
+  intros.
+  apply Permutation_length in H.
+  rewrite H.
+  apply app_length.
+Qed.
 
 Theorem MedianOfMedians_correct:
   forall l k,
@@ -442,7 +525,13 @@ Proof.
         }
         lia.
     - apply Hoare_test_bind; intros.
-      eapply Hoare_bind; [apply get_medians_correct |].
+      eapply Hoare_bind; [apply get_medians_correct |]. {
+        unfold not.
+        intros.
+        rewrite H1 in H0.
+        simpl in H0.
+        lia.
+      }
       intros a [? ?].
       eapply Hoare_bind. {
         pose proof list_length_half_lt a H1.
