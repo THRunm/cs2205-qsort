@@ -36,27 +36,68 @@ Definition group_of_five l:=
 
 (* Lemma *)
 
+Fixpoint insert (x : Z) (l : list Z) : list Z :=
+ match l with
+ | nil => x :: nil 
+ | y :: l' => if x <=? y then x :: l else y :: insert x l'
+ end.
+
+Lemma insert_perm:
+ forall x l, Permutation (x :: l) (insert x l).
+Proof.
+ intros x l.
+ induction l; simpl.
+ - apply Permutation_refl.
+ - destruct (x <=? a) eqn:E.
+   + apply Permutation_refl.
+   + apply perm_trans with (a :: x :: l).
+     * apply perm_swap.
+     * apply perm_skip.
+       apply IHl.
+Qed.
+
 Definition insertion_sort_body:
   list Z * list Z -> SetMonad.M (ContinueOrBreak (list Z * list Z) (list Z)) :=
   fun '(rest_list, current_ret) =>
     match rest_list with
     | nil => break current_ret
     | x :: rest_list' =>
-      let fix insert x l :=
-          match l with
-          | nil => x :: nil
-          | y :: l' => if x <=? y then x :: l else y :: insert x l'
-          end in
       continue (rest_list', insert x current_ret)
     end.
 
 Definition insertion_sort (l : (list Z)): SetMonad.M (list Z):=
   repeat_break insertion_sort_body (l, nil).
 
-Theorem insertion_sort_perm:
+Lemma insertion_sort_perm:
  forall l,
   Hoare (insertion_sort l) (Permutation l).
-Admitted.
+Proof.
+  intros.
+  unfold insertion_sort.
+  apply (Hoare_repeat_break _ 
+    (fun '(rest, sorted) => Permutation l (rest ++ sorted))).
+  
+  intros [rest sorted] H.
+  destruct rest.
+  
+  unfold insertion_sort_body.
+
+  - apply Hoare_ret. 
+    rewrite app_nil_l in H.
+    exact H.
+    
+  - apply Hoare_ret.
+    simpl in *.
+    apply perm_trans with (z :: rest ++ sorted).
+   * apply H.  (* 使用假设 H *)
+   * apply perm_trans with (rest ++ z :: sorted).
+   + apply Permutation_middle.
+   + rewrite <- insert_perm.
+    apply Permutation_refl.
+    
+  - rewrite app_nil_r.
+    apply Permutation_refl.  
+Qed.
 
 Fixpoint get_nth (n: nat) (l: list Z) : Z :=
   match n, l with
@@ -64,6 +105,22 @@ Fixpoint get_nth (n: nat) (l: list Z) : Z :=
   | S n', _::l' => get_nth n' l'
   | _, nil => 0
 end.
+
+Definition In' (l: list Z) (x : Z): Prop :=
+  In x l.
+
+Lemma get_nth_in:
+  forall (k: nat) (l: list Z),
+    (k < length l)%nat -> In' l (get_nth k l).
+Proof.
+  induction k; intros l H; simpl.
+  - destruct l; simpl in H.
+   + lia.
+   + left. reflexivity.
+  - destruct l; simpl in H.
+   + lia.
+   + right. apply IHk. lia.
+Qed.
 
 Definition median (l : (list Z)): SetMonad.M Z:=
   sorted <- insertion_sort l;;
@@ -83,6 +140,18 @@ Definition get_medians_body:
 Definition get_medians (l: list Z): SetMonad.M (list Z):=
   repeat_break get_medians_body (l, nil).
 
+(* Lemma get_medians_in:
+  forall l: list Z,
+    l' <- get_medians l;; forall x: Z, In x l' -> In x l. *)
+
+Definition list_include (l l': list Z):=
+  forall x: Z, In' l' x -> In' l x.
+
+Lemma get_medians_in:
+  forall (l: list Z),
+    Hoare (get_medians l) (list_include l).
+Admitted.
+
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
     Permutation l (l1 ++ l2 ++ l3)
@@ -96,45 +165,49 @@ Definition MedianOfMedians_body
       (k: nat)
   : SetMonad.M Z
   :=
-  match l with
-  | a :: b :: c :: d :: e :: l' => 
-    medians <- get_medians l;;
-    let len := (length medians) in
-    pivot <- W medians (Nat.div len 2);;
-    '(lo, pivots, hi) <- partition pivot l;;
-    (* match Nat.compare k (length lo) with
-    | Lt => W lo k
-    | _ => match Nat.compare k (length lo + length pivots) with
-      | Lt => ret pivot
-      | _ => W hi (Nat.sub k (length lo + length pivots))
-      end
-    end *)
-    if Nat.ltb k (length lo) then
-      W lo k
-    else if Nat.ltb k (length lo + length pivots) then
-      ret pivot
-    else
-      W hi (Nat.sub k (length lo + length pivots))
-  | _ => 
-    sorted_l <- insertion_sort l;;
-    ret (get_nth k sorted_l)
-  end.
+  choice
+    ((test (length l < 5)%nat);;
+     sorted <- insertion_sort l;;
+     ret (get_nth k sorted))
+    ((test (length l >= 5)%nat);;
+     medians <- get_medians l;;
+     pivot <- W medians (length medians / 2)%nat;;
+     '(lo, pivots, hi) <- partition pivot l;;
+     if Nat.ltb k (length lo) then
+       W lo k
+     else if Nat.ltb k (length lo + length pivots) then
+       ret pivot
+     else
+       W hi (Nat.sub k (length lo + length pivots))).
 
 Definition MedianOfMedians: list Z -> nat -> SetMonad.M Z :=
   Kleene_LFix MedianOfMedians_body.
 
-Definition In' (l: list Z) (x : Z): Prop :=
-  In x l.
-
-Theorem PermutationIn:
+Lemma permutation_in:
   forall (p q: list Z) (x: Z),
     Permutation p q -> In' p x <-> In' q x.
-Admitted.
+Proof.
+  intros p q x H.
+  split; intros HIn.
+  - apply Permutation_sym in H.
+   induction H.
+   + assumption.
+   + simpl in *. destruct HIn; auto.
+   + simpl in *. destruct HIn; auto.
+     destruct H.
+     * left; auto.
+     * right; auto.
+   + auto.
 
-Theorem GetnthIn:
-  forall (k: nat) (l: list Z),
-    (k < length l)%nat -> In' l (get_nth k l).
-Admitted.
+  - induction H.
+   + assumption. 
+   + simpl in *. destruct HIn; auto.
+   + simpl in *. destruct HIn; auto.
+     destruct H.
+     * left; auto.
+     * right; auto.
+   + auto.
+Qed.
 
 Theorem MedianOfMedians_correct:
   forall l k,
@@ -150,43 +223,21 @@ Proof.
   change (Hoare (Nat.iter n MedianOfMedians_body ∅ l k) (In' l)).
   induction n; simpl.
   + unfold Hoare; sets_unfold; tauto.
-  + destruct l as [|a [|b [|c [|d [|e rest]]]]].
-    - simpl in H; lia.
-    - eapply Hoare_bind.
+  + unfold MedianOfMedians_body at 1.
+    apply Hoare_choice.
+    - apply Hoare_test_bind; intros.
+      eapply Hoare_bind.
       * apply insertion_sort_perm.
       * intros; apply Hoare_ret.
-        pose proof PermutationIn [a] a0 (get_nth k a0) H0.
-        rewrite H1; apply GetnthIn.
-        assert(length [a] = length a0).
-        apply Permutation_length; exact H0.
+        pose proof permutation_in l a (get_nth k a) H1.
+        rewrite H2; apply get_nth_in.
+        assert (length l = length a). {
+          apply Permutation_length; exact H1.
+        }
         lia.
-    - eapply Hoare_bind.
-      * apply insertion_sort_perm.
-      * intros; apply Hoare_ret.
-        pose proof PermutationIn [a; b] a0 (get_nth k a0) H0.
-        rewrite H1; apply GetnthIn.
-        assert(length [a; b] = length a0).
-        apply Permutation_length; exact H0.
-        lia.
-    - eapply Hoare_bind.
-      * apply insertion_sort_perm.
-      * intros; apply Hoare_ret.
-        pose proof PermutationIn [a; b; c] a0 (get_nth k a0) H0.
-        rewrite H1; apply GetnthIn.
-        assert(length [a; b; c] = length a0).
-        apply Permutation_length; exact H0.
-        lia.
-    - eapply Hoare_bind.
-      * apply insertion_sort_perm.
-      * intros; apply Hoare_ret.
-        pose proof PermutationIn [a; b; c; d] a0 (get_nth k a0) H0.
-        rewrite H1; apply GetnthIn.
-        assert(length [a; b; c; d] = length a0).
-        apply Permutation_length; exact H0.
-        lia.
-    - eapply Hoare_bind.
-      *
-
+    - apply Hoare_test_bind; intros.
+      eapply Hoare_bind.
+      * 
 Qed.
 
 End QSortExample2.
