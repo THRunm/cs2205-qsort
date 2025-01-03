@@ -261,7 +261,8 @@ forall l: list Z,
         split.
         + intros x H; contradiction.
         + intros x H; assumption.
-  Qed.
+Qed.
+             
 Definition partition (pivot: Z) (l: list Z): SetMonad.M (list Z * list Z * list Z) :=
   fun '(l1, l2, l3) =>
     Permutation l (l1 ++ l2 ++ l3)
