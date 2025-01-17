@@ -22,13 +22,13 @@ Module QSortExample2.
 Import SetMonadHoare
        SetMonadOperator0
        SetMonadOperator1
-       ListNotations. 
+       ListNotations.
 
 Fixpoint insert (x : Z) (l : list Z) : list Z :=
- match l with
- | nil => x :: nil 
- | y :: l' => if x <=? y then x :: l else y :: insert x l'
- end.
+  match l with
+  | nil => x :: nil 
+  | y :: l' => if x <=? y then x :: l else y :: insert x l'
+  end.
 
 Lemma insert_perm:
  forall x l, Permutation (x :: l) (insert x l).
@@ -452,7 +452,6 @@ Proof.
   exact H.
 Qed.
 
-
 Lemma Kleene_list_include (l l': list Z):
   forall n k: nat, list_include l l' -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l') -> Hoare (Nat.iter n MedianOfMedians_body ∅ l' k) (In' l).
 Proof.
@@ -463,7 +462,6 @@ Proof.
   pose proof H a H1.
   apply H2.
 Qed.
-
 
 Lemma list_partition_include (l l1 l2: list Z):
   Permutation l (l1 ++ l2) -> (list_include l l1 /\ list_include l l2).
@@ -576,5 +574,148 @@ Proof.
       apply H9.
       apply H6.
 Qed.
+
+Fixpoint count_le (x : Z) (l : list Z) : nat :=
+  match l with
+  | nil => 0
+  | y :: l' => if x >=? y then 1 + count_le x l' else count_le x l'
+  end.
+
+Fixpoint count_ge (x : Z) (l : list Z) : nat :=
+  match l with
+  | nil => 0
+  | y :: l' => if x <=? y then 1 + count_ge x l' else count_ge x l'
+  end.
+
+Definition is_median: Prop :=
+  forall l, Hoare (median l) (fun x => (count_le x l * 2 >= (length l))%nat /\ (count_ge x l * 2 >= (length l))%nat).
+
+Definition calc_range_body:
+  list (list Z) * Z * nat * nat * nat * nat -> SetMonad.M (ContinueOrBreak (list (list Z) * Z * nat * nat * nat * nat) (nat * nat * nat * nat)) :=
+  fun '(lol, mid, Nle, nle, Nge, nge) =>
+    match lol with
+    | nil => break (Nle, nle, Nge, nge)
+    | l :: rst =>
+      nw <- median l;;
+      choice
+        (test (nw = mid);;
+          continue (rst, mid, (Nle + count_le nw l)%nat, (nle + 1)%nat, (Nge + count_ge nw l)%nat, (nge + 1)%nat))
+        (choice
+          (test (nw < mid);;
+            continue (rst, mid, (Nle + count_le nw l)%nat, (nle + 1)%nat, Nge, nge))
+          (test (nw > mid);;
+            continue (rst, mid, Nle, nle, (Nge + count_ge nw l)%nat, (nge + 1)%nat)))
+    end.
+
+Definition calc_range (lol: list (list Z)) (mid: Z): SetMonad.M (nat * nat * nat * nat) :=
+  repeat_break calc_range_body (lol, mid, 0%nat, 0%nat, 0%nat, 0%nat).
+
+Definition partitioned_lol (lol: list (list Z)): Prop :=
+  forall l, In l lol -> (length l = 5)%nat.
+
+Theorem range_correct :
+  forall lol x, partitioned_lol lol -> is_median -> Hoare (calc_range lol x) (fun '(Nle, nle, Nge, nge) => (Nle >= 3 * nle)%nat /\ (Nge >= 3 * nge)%nat).
+Proof.
+  intros.
+  unfold calc_range.
+  apply (Hoare_repeat_break _ (fun '(lol, mid, Nle, nle, Nge, nge) => (partitioned_lol lol) /\ (Nle >= 3 * nle)%nat /\ (Nge >= 3 * nge)%nat)).
+  intros.
+  - destruct a; destruct p; destruct p; destruct p; destruct p.
+    destruct H1.
+    unfold calc_range_body.
+    destruct l.
+    + apply Hoare_ret.
+      tauto.
+    + eapply Hoare_bind.
+      * apply H0.
+      * intros.
+        apply Hoare_choice.
+        -- apply Hoare_test_bind.
+           intros.
+           apply Hoare_ret.
+           split.
+           unfold partitioned_lol in H1.
+           ++ unfold partitioned_lol.
+              intros.
+              assert (In l1 (l :: l0)). { 
+                right. exact H5. 
+              }
+              apply H1 in H6.
+              lia.
+           ++ simpl in H3.
+              destruct H3.
+              assert (In l (l :: l0)). { 
+                left. reflexivity. 
+              }
+              apply H1 in H6.
+              split.
+              **  rewrite H6 in H3.
+                  lia.
+              **  rewrite H6 in H5.
+                  lia.
+        -- apply Hoare_choice.
+           ++ apply Hoare_test_bind.
+              intros.
+              apply Hoare_ret.
+              split.
+              unfold partitioned_lol in H1.
+              **  unfold partitioned_lol.
+                  intros.
+                  assert (In l1 (l :: l0)). { 
+                    right. exact H5. 
+                  }
+                  apply H1 in H6.
+                  lia.
+              **  simpl in H3.
+                  destruct H3.
+                  assert (In l (l :: l0)). { 
+                    left. reflexivity. 
+                  }
+                  apply H1 in H6.
+                  split.
+                  unfold partitioned_lol in H1.
+                  +++ simpl in H3.
+                      assert (In l (l :: l0)). { 
+                        left. reflexivity. 
+                      }
+                      apply H1 in H7.
+                      rewrite H7 in H3.
+                      lia.
+                  +++ destruct H2.
+                      lia.
+          ++ apply Hoare_test_bind.
+              intros.
+              apply Hoare_ret.
+              split.
+              unfold partitioned_lol in H1.
+              **  unfold partitioned_lol.
+                  intros.
+                  assert (In l1 (l :: l0)). { 
+                    right. exact H5. 
+                  }
+                  apply H1 in H6.
+                  lia.
+              **  simpl in H3.
+                  destruct H3.
+                  assert (In l (l :: l0)). { 
+                    left. reflexivity. 
+                  }
+                  apply H1 in H6.
+                  split.
+                  unfold partitioned_lol in H1.
+                  +++ simpl in H3.
+                      assert (In l (l :: l0)). { 
+                        left. reflexivity. 
+                      }
+                      apply H1 in H7.
+                      rewrite H7 in H5.
+                      lia.
+                  +++ destruct H2.
+                      lia.
+  - split.
+    tauto.
+    split;lia.
+Qed.
+(*Finally, take x to be the median of medians of lol, we gain Nle >= 3 * nle >= 3 * length concat lol / 10 /\ Nge >= 3 * nge >= 3 * length concat lol / 10, which is what we want. *)
 
 End QSortExample2.
